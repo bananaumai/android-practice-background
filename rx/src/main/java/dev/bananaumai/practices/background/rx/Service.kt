@@ -9,6 +9,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.*
 import android.util.Log
+import io.reactivex.Flowable
 import io.reactivex.FlowableSubscriber
 import kotlin.random.Random
 import io.reactivex.processors.*
@@ -28,22 +29,18 @@ class DataHandler : Service() {
         return binder
     }
 
-    fun startHandle(processor: PublishProcessor<Any>) {
+    fun startHandle(processor: Flowable<Any>) {
         val subscriber = object : FlowableSubscriber<Any> {
             override fun onSubscribe(s: Subscription) {
-                Log.d(tag, "onSubscribe")
+                Log.d(tag, "${Thread.currentThread().name}: onSubscribe")
             }
 
             override fun onNext(t: Any?) {
-                if (rand.nextInt(10) % 2 == 0) {
-                    Thread.sleep(40)
-                }
-
-                Log.d(tag, "${Thread.currentThread().name}: " + t.toString())
+                Log.d(tag, "${Thread.currentThread().name}: ${t.toString()}")
             }
 
             override fun onComplete() {
-                Log.d(tag, "onComplete")
+                Log.d(tag, "${Thread.currentThread().name}: onComplete")
             }
 
             override fun onError(t: Throwable?) {
@@ -52,10 +49,19 @@ class DataHandler : Service() {
                     throw t
                 }
             }
-
         }
 
-        processor.observeOn(Schedulers.computation()).subscribe(subscriber)
+        processor
+            .observeOn(Schedulers.computation())
+            .onBackpressureLatest()
+            .subscribe({ data ->
+                if (rand.nextInt(10) % 2 == 0) {
+                    Thread.sleep(40)
+                }
+                Log.d(tag, "${Thread.currentThread().name}: ${data.toString()}")
+            }, { error ->
+                Log.d(tag, error.message)
+            })
     }
 }
 
@@ -91,7 +97,7 @@ object AccelerometerEventEmitter {
                     return
                 }
 
-                Log.d(tag, "${Thread.currentThread().name}: emit event")
+                Log.d(tag, "${Thread.currentThread().name}: emit event ${event.timestamp}")
                 processor.onNext(AccelerometerEvent(event))
             }
 
@@ -99,6 +105,6 @@ object AccelerometerEventEmitter {
             }
         }
         val sensor = manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+        manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
     }
 }

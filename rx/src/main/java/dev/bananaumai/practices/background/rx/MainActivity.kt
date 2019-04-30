@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.util.Log
 import io.reactivex.processors.PublishProcessor
 import io.reactivex.schedulers.Schedulers
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
     private val tag = this.javaClass.name
@@ -43,7 +44,7 @@ class MainActivity : AppCompatActivity() {
             Log.d(tag, "onServiceConnected")
             val binder = service as DataHandler.LocalBinder
             handler = binder.getService()
-            handler?.startHandle(processor)
+            handler?.startHandle(processor.throttleLatest(100, TimeUnit.MILLISECONDS))
             boundHandler = true
         }
 
