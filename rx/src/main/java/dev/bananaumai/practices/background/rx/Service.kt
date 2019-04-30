@@ -9,9 +9,11 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.*
 import android.util.Log
+import io.reactivex.FlowableSubscriber
 import kotlin.random.Random
 import io.reactivex.processors.*
 import io.reactivex.schedulers.Schedulers
+import org.reactivestreams.Subscription
 
 class DataHandler : Service() {
     private val tag = this.javaClass.name
@@ -27,13 +29,33 @@ class DataHandler : Service() {
     }
 
     fun startHandle(processor: PublishProcessor<Any>) {
-        processor.observeOn(Schedulers.computation()).subscribe {
-            if (rand.nextInt(10) % 2 == 0) {
-                Thread.sleep(40)
+        val subscriber = object : FlowableSubscriber<Any> {
+            override fun onSubscribe(s: Subscription) {
+                Log.d(tag, "onSubscribe")
             }
 
-            Log.d(tag, "${Thread.currentThread().name}: " + it.toString())
+            override fun onNext(t: Any?) {
+                if (rand.nextInt(10) % 2 == 0) {
+                    Thread.sleep(40)
+                }
+
+                Log.d(tag, "${Thread.currentThread().name}: " + t.toString())
+            }
+
+            override fun onComplete() {
+                Log.d(tag, "onComplete")
+            }
+
+            override fun onError(t: Throwable?) {
+                if (t != null) {
+                    Log.d(tag, t.message)
+                    throw t
+                }
+            }
+
         }
+
+        processor.observeOn(Schedulers.computation()).subscribe(subscriber)
     }
 }
 
