@@ -88,7 +88,7 @@ class AccelerometerEvent(private val event: SensorEvent) {
 }
 
 object AccelerometerEventEmitter {
-    val tag = this.javaClass.name
+    private val tag = this.javaClass.name
 
     fun start(manager: SensorManager, processor: PublishProcessor<Any>) {
         val listener = object : SensorEventListener {
