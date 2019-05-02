@@ -10,9 +10,9 @@ import android.hardware.SensorManager
 import android.os.*
 import android.util.Log
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.channels.*
+import java.text.DateFormat
+import java.util.*
 import kotlin.random.Random
 
 class DataHandler : Service() {
@@ -30,8 +30,21 @@ class DataHandler : Service() {
     }
 
     fun startHandle(channel: ReceiveChannel<Any>) = scope.launch {
-        channel.consumeEach {
-            Log.d(tag, "${Thread.currentThread().name}: $it")
+        // consumeEach is Experimental API
+//        channel.consumeEach { event ->
+//            val delayed = rand.nextInt(10) % 2 == 0
+//            if (delayed) {
+//                delay(200)
+//            }
+//            Log.d(tag, "$event (${Thread.currentThread().name}) delayed? : $delayed")
+//        }
+
+        for (event in channel) {
+            val delayed = rand.nextInt(10) % 2 == 0
+            if (delayed) {
+                delay(1000)
+            }
+            Log.d(tag, "$event (${Thread.currentThread().name}) : delayed = $delayed")
         }
     }
 }
@@ -49,28 +62,30 @@ class DataEmitter : Service() {
 
     fun startEmit(processor: Channel<Any>) {
         val sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        AccelerometerEventEmitter.start(sensorManager, processor)
+        Accelerometer.start(sensorManager, processor)
     }
 }
 
-class AccelerometerEvent(private val event: SensorEvent) {
-    override fun toString() =
-        "${this.javaClass.name} { timestamp: ${event.timestamp}, values: ${event.values.joinToString(",", "[", "]")} }"
-}
+data class AccelerometerEvent(val timestampe: Long, val values: List<Float>)
 
-object AccelerometerEventEmitter {
+object Accelerometer {
     private val tag = this.javaClass.name
+    private val scope = CoroutineScope(Job() + Dispatchers.Default)
+    private val random = Random.Default
 
-    fun start(manager: SensorManager, channel: Channel<Any>) {
+    fun start(manager: SensorManager, channel: SendChannel<Any>) {
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
                 if (event?.sensor?.getType() != Sensor.TYPE_ACCELEROMETER) {
                     return
                 }
 
-                Log.d(tag, "${Thread.currentThread().name}: emit event ${event.timestamp}")
-                runBlocking {
-                    channel.send(AccelerometerEvent(event))
+                scope.launch {
+                //runBlocking {
+                    val _event = AccelerometerEvent(event.timestamp, event.values.toList())
+                    Log.d(tag, "$_event (${Thread.currentThread().name}) - before")
+                    channel.send(_event)
+                    Log.d(tag, "$_event (${Thread.currentThread().name}) - after")
                 }
             }
 

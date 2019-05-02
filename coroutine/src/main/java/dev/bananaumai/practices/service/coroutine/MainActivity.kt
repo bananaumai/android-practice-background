@@ -8,13 +8,17 @@ import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
     private val tag = this.javaClass.name
 
-    private val channel = Channel<Any>()
+    private val channel = Channel<Any>(100)
 
     private var boundEmitter = false
     private var emitter: DataEmitter? = null
@@ -40,11 +44,12 @@ class MainActivity : AppCompatActivity() {
         private val tag = this.javaClass.name
 
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            Log.d(tag, "onServiceConnected")
+            Log.d(tag, "onServiceConnected - start")
             val binder = service as DataHandler.LocalBinder
             handler = binder.getService()
             handler?.startHandle(channel)
             boundHandler = true
+            Log.d(tag, "onServiceConnected - end")
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
