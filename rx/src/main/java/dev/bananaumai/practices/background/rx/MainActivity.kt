@@ -44,7 +44,7 @@ class MainActivity : AppCompatActivity() {
             Log.d(tag, "onServiceConnected")
             val binder = service as DataHandler.LocalBinder
             handler = binder.getService()
-            handler?.startHandle(processor.throttleLatest(100, TimeUnit.MILLISECONDS))
+            handler?.startHandle(processor)
             boundHandler = true
         }
 

@@ -15,6 +15,7 @@ import kotlin.random.Random
 import io.reactivex.processors.*
 import io.reactivex.schedulers.Schedulers
 import org.reactivestreams.Subscription
+import java.util.concurrent.TimeUnit
 
 class DataHandler : Service() {
     private val tag = this.javaClass.name
@@ -29,36 +30,16 @@ class DataHandler : Service() {
         return binder
     }
 
-    fun startHandle(processor: Flowable<Any>) {
-        val subscriber = object : FlowableSubscriber<Any> {
-            override fun onSubscribe(s: Subscription) {
-                Log.d(tag, "${Thread.currentThread().name}: onSubscribe")
-            }
-
-            override fun onNext(t: Any?) {
-                Log.d(tag, "${Thread.currentThread().name}: ${t.toString()}")
-            }
-
-            override fun onComplete() {
-                Log.d(tag, "${Thread.currentThread().name}: onComplete")
-            }
-
-            override fun onError(t: Throwable?) {
-                if (t != null) {
-                    Log.d(tag, t.message)
-                    throw t
-                }
-            }
-        }
-
-        processor
+    fun startHandle(stream: Flowable<Any>) {
+        stream
             .observeOn(Schedulers.computation())
             .onBackpressureLatest()
-            .subscribe({ data ->
+            .throttleLast(100, TimeUnit.MILLISECONDS)
+            .subscribe({ event ->
+                Log.d(tag, "$event (${Thread.currentThread().name})")
                 if (rand.nextInt(10) % 2 == 0) {
                     Thread.sleep(40)
                 }
-                Log.d(tag, "${Thread.currentThread().name}: ${data.toString()}")
             }, { error ->
                 Log.d(tag, error.message)
             })
@@ -78,16 +59,13 @@ class DataEmitter : Service() {
 
     fun startEmit(processor: PublishProcessor<Any>) {
         val sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        AccelerometerEventEmitter.start(sensorManager, processor)
+        Accelerometer.start(sensorManager, processor)
     }
 }
 
-class AccelerometerEvent(private val event: SensorEvent) {
-    override fun toString() =
-        "${this.javaClass.name} { timestamp: ${event.timestamp}, values: ${event.values.joinToString(",", "[", "]")} }"
-}
+data class AccelerometerEvent(val timestampe: Long, val values: List<Float>)
 
-object AccelerometerEventEmitter {
+object Accelerometer {
     private val tag = this.javaClass.name
 
     fun start(manager: SensorManager, processor: PublishProcessor<Any>) {
@@ -97,8 +75,10 @@ object AccelerometerEventEmitter {
                     return
                 }
 
-                Log.d(tag, "${Thread.currentThread().name}: emit event ${event.timestamp}")
-                processor.onNext(AccelerometerEvent(event))
+                val evt = AccelerometerEvent(event.timestamp, event.values.toList())
+                Log.d(tag, "$evt (${Thread.currentThread().name}) - before")
+                processor.onNext(evt)
+                Log.d(tag, "$evt (${Thread.currentThread().name}) - after")
             }
 
             override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {
