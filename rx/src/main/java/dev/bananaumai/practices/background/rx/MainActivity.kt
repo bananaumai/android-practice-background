@@ -9,8 +9,6 @@ import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
 import io.reactivex.processors.PublishProcessor
-import io.reactivex.schedulers.Schedulers
-import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
     private val tag = this.javaClass.name
