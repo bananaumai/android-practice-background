@@ -10,11 +10,10 @@ import android.hardware.SensorManager
 import android.os.*
 import android.util.Log
 import io.reactivex.Flowable
-import io.reactivex.FlowableSubscriber
 import kotlin.random.Random
 import io.reactivex.processors.*
 import io.reactivex.schedulers.Schedulers
-import org.reactivestreams.Subscription
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 class DataHandler : Service() {
@@ -63,8 +62,11 @@ class DataEmitter : Service() {
     }
 }
 
-data class AccelerometerEvent(val timestampe: Long, val values: List<Float>)
-
+data class AccelerometerEvent(
+    val timestampe: Long,
+    val values: List<Float>,
+    val createdAt: Instant = Instant.now()
+)
 object Accelerometer {
     private val tag = this.javaClass.name
 
@@ -75,7 +77,7 @@ object Accelerometer {
                     return
                 }
 
-                val evt = AccelerometerEvent(event.timestamp, event.values.toList())
+                val evt = AccelerometerEvent(event.timestamp / 1_000_000, event.values.toList())
                 Log.d(tag, "$evt (${Thread.currentThread().name}) - before")
                 processor.onNext(evt)
                 Log.d(tag, "$evt (${Thread.currentThread().name}) - after")
