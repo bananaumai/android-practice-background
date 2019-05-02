@@ -10,11 +10,11 @@ import android.hardware.SensorManager
 import android.os.*
 import android.util.Log
 import io.reactivex.Flowable
-import kotlin.random.Random
-import io.reactivex.processors.*
+import io.reactivex.processors.PublishProcessor
 import io.reactivex.schedulers.Schedulers
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 class DataHandler : Service() {
     private val tag = this.javaClass.name
@@ -36,9 +36,7 @@ class DataHandler : Service() {
             .throttleLast(100, TimeUnit.MILLISECONDS)
             .subscribe({ event ->
                 Log.d(tag, "$event (${Thread.currentThread().name})")
-                if (rand.nextInt(10) % 2 == 0) {
-                    Thread.sleep(40)
-                }
+                Thread.sleep(40 * rand.nextLong(4))
             }, { error ->
                 Log.d(tag, error.message)
             })
@@ -88,6 +86,10 @@ object Accelerometer {
             }
         }
         val sensor = manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
+
+        HandlerThread("AccelerometerHandlerThread", Process.THREAD_PRIORITY_BACKGROUND).apply {
+            start()
+            manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI, Handler(looper))
+        }
     }
 }
