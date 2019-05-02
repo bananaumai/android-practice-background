@@ -7,12 +7,45 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.os.*
+import android.os.Binder
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.IBinder
+import android.os.Process
 import android.util.Log
-import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.channels.produce
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.Instant
+import kotlin.coroutines.CoroutineContext
 import kotlin.random.Random
+
+fun <E> ReceiveChannel<E>.throttleLast(
+    interval: Long,
+    context: CoroutineContext = Dispatchers.Default
+): ReceiveChannel<E> = with(CoroutineScope(context)) {
+    produce(coroutineContext) {
+        val tag = this.javaClass.name
+        var nextTime = 0L
+        consumeEach {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime > nextTime) {
+                nextTime = currentTime + interval
+                Log.d(tag, "[send] $it (${Thread.currentThread().name})")
+                send(it)
+            } else {
+                Log.d(tag, "[drop] $it (${Thread.currentThread().name})")
+            }
+        }
+    }
+}
 
 class DataHandler : Service() {
     private val tag = this.javaClass.name
@@ -29,21 +62,22 @@ class DataHandler : Service() {
     }
 
     fun startHandle(channel: ReceiveChannel<Any>) = scope.launch {
-        // consumeEach is Experimental API
-//        channel.consumeEach { event ->
-//            val delayed = rand.nextInt(10) % 2 == 0
-//            if (delayed) {
-//                delay(200)
-//            }
-//            Log.d(tag, "$event (${Thread.currentThread().name}) delayed? : $delayed")
-//        }
+        val channel = channel.throttleLast(100, coroutineContext)
 
-        for (event in channel) {
-            val delayed = rand.nextInt(10) % 2 == 0
-            if (delayed) {
-                delay(1000)
+        while (true) {
+            if (channel.isClosedForReceive) {
+                break
             }
-            Log.d(tag, "$event (${Thread.currentThread().name}) : delayed = $delayed")
+
+            val e = channel.receive()
+
+            Log.d(tag, "[process] $e (${Thread.currentThread().name})")
+
+            if (rand.nextInt(10) % 2 == 0) {
+                delay(150)
+            } else {
+                delay(50)
+            }
         }
     }
 }
@@ -82,11 +116,12 @@ object Accelerometer {
                     return
                 }
 
+                val ev = AccelerometerEvent(event.timestamp / 1_000_000, event.values.toList())
+                Log.d(tag, "[before] $ev (${Thread.currentThread().name})")
+
                 scope.launch {
-                    val _event = AccelerometerEvent(event.timestamp / 1_000_000, event.values.toList())
-                    Log.d(tag, "$_event (${Thread.currentThread().name}) - before")
-                    channel.send(_event)
-                    Log.d(tag, "$_event (${Thread.currentThread().name}) - after")
+                    channel.send(ev)
+                    Log.d(tag, "[after] $ev (${Thread.currentThread().name})")
                 }
             }
 
@@ -94,6 +129,11 @@ object Accelerometer {
             }
         }
         val sensor = manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
+
+        HandlerThread("AccelerometerHandlerThread", Process.THREAD_PRIORITY_BACKGROUND).apply {
+            start()
+            val handler = Handler(looper)
+            manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI, handler)
+        }
     }
 }

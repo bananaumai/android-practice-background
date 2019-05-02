@@ -13,7 +13,7 @@ import kotlinx.coroutines.channels.Channel
 class MainActivity : AppCompatActivity() {
     private val tag = this.javaClass.name
 
-    private val channel = Channel<Any>(100)
+    private val channel = Channel<Any>()
 
     private var boundEmitter = false
     private var emitter: DataEmitter? = null
