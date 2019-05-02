@@ -67,6 +67,7 @@ data class AccelerometerEvent(
     val values: List<Float>,
     val createdAt: Instant = Instant.now()
 )
+
 object Accelerometer {
     private val tag = this.javaClass.name
 

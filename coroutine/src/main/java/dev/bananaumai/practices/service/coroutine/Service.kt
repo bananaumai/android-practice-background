@@ -11,8 +11,7 @@ import android.os.*
 import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.*
-import java.text.DateFormat
-import java.util.*
+import java.time.Instant
 import kotlin.random.Random
 
 class DataHandler : Service() {
@@ -66,12 +65,15 @@ class DataEmitter : Service() {
     }
 }
 
-data class AccelerometerEvent(val timestampe: Long, val values: List<Float>)
+data class AccelerometerEvent(
+    val timestampe: Long,
+    val values: List<Float>,
+    val createdAt: Instant = Instant.now()
+)
 
 object Accelerometer {
     private val tag = this.javaClass.name
     private val scope = CoroutineScope(Job() + Dispatchers.Default)
-    private val random = Random.Default
 
     fun start(manager: SensorManager, channel: SendChannel<Any>) {
         val listener = object : SensorEventListener {
@@ -81,8 +83,7 @@ object Accelerometer {
                 }
 
                 scope.launch {
-                //runBlocking {
-                    val _event = AccelerometerEvent(event.timestamp, event.values.toList())
+                    val _event = AccelerometerEvent(event.timestamp / 1_000_000, event.values.toList())
                     Log.d(tag, "$_event (${Thread.currentThread().name}) - before")
                     channel.send(_event)
                     Log.d(tag, "$_event (${Thread.currentThread().name}) - after")
