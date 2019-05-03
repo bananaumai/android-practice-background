@@ -1,12 +1,14 @@
 package dev.bananaumai.practices.background.rx
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.support.v7.app.AppCompatActivity
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.IBinder
+import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import io.reactivex.processors.PublishProcessor
 
@@ -56,6 +58,11 @@ class MainActivity : AppCompatActivity() {
 
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 1000)
+            return
+        }
 
         Intent(this, DataEmitter::class.java).also {
             bindService(it, emitterConnection, Context.BIND_AUTO_CREATE)

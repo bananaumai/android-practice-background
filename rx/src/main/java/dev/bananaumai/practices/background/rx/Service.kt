@@ -7,12 +7,18 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.location.Location
 import android.os.Binder
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Process
 import android.util.Log
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
 import io.reactivex.Flowable
 import io.reactivex.disposables.Disposable
 import io.reactivex.processors.PublishProcessor
@@ -62,10 +68,14 @@ class DataEmitter : Service() {
     }
 
     fun startEmit(processor: PublishProcessor<Any>) {
+        if (running) return
+
         val sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val accelerometer = Accelerometer(sensorManager)
 
-        subscription = listOf(accelerometer)
+        val locationEmitter = LocationEmitter(this)
+
+        subscription = listOf(accelerometer, locationEmitter)
             .map { it.start().run { toStream() } }
             .reduce { acc, stream -> acc.mergeWith(stream) }
             .subscribe { processor.onNext(it) }
@@ -122,4 +132,62 @@ class Accelerometer(val sensorManager: SensorManager) : Emittable {
     }
 
     override fun toStream(): Flowable<Any> = processor.throttleLast(100, TimeUnit.MILLISECONDS)
+}
+
+data class LocationEvent(val lat: Double, val lon: Double, val speed: Float)
+
+fun Location.toLocationEvent() = LocationEvent(latitude, longitude, speed)
+
+class LocationEmitter(val context: Context) : Emittable {
+    private val tag = this.javaClass.name
+    private val processor = PublishProcessor.create<Any>()
+
+    private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+    private val locationSettingsClient = LocationServices.getSettingsClient(context)
+    private val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(locationResult: LocationResult?) {
+            if (locationResult == null) return
+
+            val evt = locationResult.lastLocation.toLocationEvent()
+            Log.d(tag, "[before] $evt (${Thread.currentThread().name})")
+            processor.onNext(evt)
+            Log.d(tag, "[after] $evt (${Thread.currentThread().name})")
+        }
+    }
+
+    override fun start(): LocationEmitter {
+        val builder = LocationSettingsRequest.Builder()
+        val request = createLocationRequest()
+
+        locationSettingsClient
+            .checkLocationSettings(builder.build())
+            .addOnSuccessListener {
+                Log.d(tag, "$it")
+                try {
+                    HandlerThread("LocationEmitterThread", Process.THREAD_PRIORITY_BACKGROUND).apply {
+                        fusedLocationClient.requestLocationUpdates(request, locationCallback, looper)
+                    }
+                } catch (e: SecurityException) {
+                    throw e
+                }
+            }
+            .addOnFailureListener {
+                throw it
+            }
+
+        return this
+    }
+
+    override fun toStream(): Flowable<Any> = processor
+
+    private fun createLocationRequest(): LocationRequest {
+        val locationRequest = LocationRequest.create() ?: throw RuntimeException("couldn't create locatilon request")
+
+        locationRequest.interval = 1000
+        locationRequest.fastestInterval = 1000
+        locationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+
+        return locationRequest
+    }
+
 }
