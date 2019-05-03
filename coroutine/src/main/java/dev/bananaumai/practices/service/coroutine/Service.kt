@@ -23,6 +23,7 @@ import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.channels.produce
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import java.time.Instant
 import kotlin.coroutines.CoroutineContext
 import kotlin.random.Random
@@ -32,16 +33,40 @@ fun <E> ReceiveChannel<E>.throttleLast(
     context: CoroutineContext = Dispatchers.Default
 ): ReceiveChannel<E> = with(CoroutineScope(context)) {
     produce(coroutineContext) {
-        val tag = this.javaClass.name
+        val tag = "ReceiveChannel<E>.throttleLast"
         var nextTime = 0L
         consumeEach {
             val currentTime = System.currentTimeMillis()
             if (currentTime > nextTime) {
                 nextTime = currentTime + interval
-                Log.d(tag, "[send] $it (${Thread.currentThread().name})")
+                Log.d(tag, "[sent] $it (${Thread.currentThread().name})")
                 send(it)
             } else {
                 Log.d(tag, "[drop] $it (${Thread.currentThread().name})")
+            }
+        }
+    }
+}
+
+fun <E> ReceiveChannel<E>.spill(
+    context: CoroutineContext = Dispatchers.Default
+): ReceiveChannel<E> = with(CoroutineScope(context)) {
+    val tag = "ReceiveChannel<E>.spill"
+    val spill = Channel<E>()
+    launch {
+        spill.consumeEach { e ->
+            Log.d(tag, "[spill] $e (${Thread.currentThread().name})")
+        }
+    }
+    produce(context) {
+        consumeEach { e ->
+            select<Unit> {
+                onSend(e) {
+                    Log.d(tag, "[sent] $e (${Thread.currentThread().name})")
+                }
+                spill.onSend(e) {
+                    Log.d(tag, "[drop] $e (${Thread.currentThread().name})")
+                }
             }
         }
     }
@@ -62,23 +87,17 @@ class DataHandler : Service() {
     }
 
     fun startHandle(channel: ReceiveChannel<Any>) = scope.launch {
-        val channel = channel.throttleLast(100, coroutineContext)
-
-        while (true) {
-            if (channel.isClosedForReceive) {
-                break
+        channel
+            //.throttleLast(100, coroutineContext)
+            .spill(coroutineContext)
+            .consumeEach {
+                Log.d(tag, "[process] $it (${Thread.currentThread().name})")
+                if (rand.nextInt(10) % 2 == 0) {
+                    delay(200)
+                } else {
+                    delay(50)
+                }
             }
-
-            val e = channel.receive()
-
-            Log.d(tag, "[process] $e (${Thread.currentThread().name})")
-
-            if (rand.nextInt(10) % 2 == 0) {
-                delay(150)
-            } else {
-                delay(50)
-            }
-        }
     }
 }
 
