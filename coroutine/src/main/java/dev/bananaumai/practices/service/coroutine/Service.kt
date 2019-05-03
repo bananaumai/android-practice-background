@@ -52,9 +52,9 @@ fun <E> ReceiveChannel<E>.spill(
     context: CoroutineContext = Dispatchers.Default
 ): ReceiveChannel<E> = with(CoroutineScope(context)) {
     val tag = "ReceiveChannel<E>.spill"
-    val spill = Channel<E>()
+    val spillway = Channel<E>()
     launch {
-        spill.consumeEach { e ->
+        spillway.consumeEach { e ->
             Log.d(tag, "[spill] $e (${Thread.currentThread().name})")
         }
     }
@@ -64,7 +64,7 @@ fun <E> ReceiveChannel<E>.spill(
                 onSend(e) {
                     Log.d(tag, "[sent] $e (${Thread.currentThread().name})")
                 }
-                spill.onSend(e) {
+                spillway.onSend(e) {
                     Log.d(tag, "[drop] $e (${Thread.currentThread().name})")
                 }
             }
