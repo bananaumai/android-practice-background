@@ -1,5 +1,7 @@
 package dev.bananaumai.practices.background.rx
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.ComponentName
 import android.content.Context
@@ -15,6 +17,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Process
+import android.support.v4.app.NotificationCompat
 import android.util.Log
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -85,6 +88,26 @@ class DataEmitter : Service() {
             .subscribe { processor.onNext(it) }
 
         running = true
+
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val name = "sample notification channel"
+        val id = "data_emitter_foreground"
+        val notifyDescription = "この通知の詳細情報を設定します"
+        if (manager.getNotificationChannel(id) == null) {
+            val mChannel = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH)
+            mChannel.apply {
+                description = notifyDescription
+            }
+            manager.createNotificationChannel(mChannel)
+        }
+
+        val notification = NotificationCompat.Builder(this, id).apply {
+            setContentTitle("emitter - test")
+            setContentText("test test")
+            setSmallIcon(R.mipmap.ic_launcher)
+        }.build()
+
+        startForeground(1, notification)
     }
 
     fun stopEmit() {
