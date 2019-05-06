@@ -1,1 +1,1 @@
-include ':simple', ':rx', ':coroutine'
+include ':simple', ':rx', ':rxclient', ':coroutine'

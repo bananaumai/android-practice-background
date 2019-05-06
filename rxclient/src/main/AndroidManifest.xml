@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          package="dev.bananaumai.practices.background.rx">
-
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+          package="dev.bananaumai.practices.background.rxclient">
 
     <application
             android:allowBackup="true"
@@ -18,17 +16,6 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <service android:name=".DataEmitter"/>
-        <service android:name=".DataHandler"/>
-        <service
-                android:name=".RemoteService"
-                android:enabled="true"
-                android:exported="true">
-            <intent-filter>
-                <action android:name="service.emitter" />
-            </intent-filter>
-        </service>
-
     </application>
 
 </manifest>

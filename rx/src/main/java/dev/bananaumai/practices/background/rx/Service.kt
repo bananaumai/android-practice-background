@@ -1,8 +1,10 @@
 package dev.bananaumai.practices.background.rx
 
 import android.app.Service
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -58,6 +60,7 @@ class DataEmitter : Service() {
     private val binder: LocalBinder = LocalBinder()
     private lateinit var subscription: Disposable
     private var running = false
+    private val bridgeStream: PublishProcessor<Any> = PublishProcessor.create<Any>()
 
     inner class LocalBinder : Binder() {
         fun getService() = this@DataEmitter
@@ -78,6 +81,7 @@ class DataEmitter : Service() {
         subscription = listOf(accelerometer, locationEmitter)
             .map { it.start().run { toStream() } }
             .reduce { acc, stream -> acc.mergeWith(stream) }
+            .mergeWith(bridgeStream)
             .subscribe { processor.onNext(it) }
 
         running = true
@@ -88,6 +92,12 @@ class DataEmitter : Service() {
             subscription.dispose()
         }
     }
+
+    fun send(a: Any) {
+        bridgeStream.onNext(OutsideEvent(a))
+    }
+
+    private data class OutsideEvent(val a: Any)
 }
 
 interface Emittable {
@@ -189,5 +199,42 @@ class LocationEmitter(val context: Context) : Emittable {
 
         return locationRequest
     }
+}
 
+class RemoteService : Service() {
+    private val binder: IRemoteService.Stub = object : IRemoteService.Stub() {
+        override fun send(n: Int): Int {
+            this@RemoteService.send(n)
+            return n
+        }
+    }
+
+    private var emitter: DataEmitter? =  null
+
+    private val emitterConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as DataEmitter.LocalBinder
+            emitter = binder.getService()
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            emitter = null
+        }
+    }
+
+    @Synchronized fun send(a: Any) {
+        emitter?.send(a)
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+
+        Intent(this, DataEmitter::class.java).also {
+            bindService(it, emitterConnection, Context.BIND_AUTO_CREATE)
+        }
+    }
+
+    override fun onBind(intent: Intent?): IBinder? {
+        return binder
+    }
 }
